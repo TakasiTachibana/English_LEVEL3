@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>英単語クイズ</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Meiryo', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .stats {
+            display: flex;
+            gap: 15px;
+            font-size: 14px;
+        }
+        .stat-item {
+            background: #f0f0f0;
+            padding: 8px 15px;
+            border-radius: 8px;
+        }
+        .question-box {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            border-left: 4px solid #667eea;
+        }
+        .next-box {
+            background: #fff3cd;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        .choices {
+            display: grid;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .choice-btn {
+            padding: 15px;
+            font-size: 16px;
+            border: 2px solid #ddd;
+            background: white;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .choice-btn:hover:not(:disabled) {
+            background: #f0f0f0;
+            transform: translateY(-2px);
+        }
+        .choice-btn:disabled { cursor: not-allowed; opacity: 0.6; }
+        .choice-btn.correct { background: #d4edda !important; border-color: #28a745; }
+        .choice-btn.incorrect { background: #f8d7da !important; border-color: #dc3545; }
+        .result-text {
+            text-align: center;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        .result-text.correct { background: #d4edda; color: #155724; }
+        .result-text.incorrect { background: #f8d7da; color: #721c24; }
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        .btn:hover { transform: translateY(-2px); }
+        .btn-primary { background: #667eea; color: white; }
+        .btn-secondary { background: #6c757d; color: white; }
+        .progress-section {
+            margin-bottom: 20px;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 5px;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            transition: width 0.3s;
+        }
+        .combo-timer {
+            height: 8px;
+            background: #28a745;
+            transition: width 0.1s linear;
+        }
+        .mistakes {
+            background: #fff3cd;
+            padding: 15px;
+            border-radius: 10px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .mistakes h3 {
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+        .mistake-item {
+            padding: 5px 0;
+            border-bottom: 1px solid #ffc107;
+            font-size: 14px;
+        }
+        input[type="number"] {
+            padding: 8px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            width: 80px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>英単語</h1>
+            <div class="stats">
+                <div class="stat-item">正解数: <span id="correct">0</span></div>
+                <div class="stat-item">COMBO: <span id="combo">0</span></div>
+                <div class="stat-item">MAX: <span id="maxCombo">0</span></div>
+                <div class="stat-item">Lv.<span id="level">1</span></div>
+            </div>
+        </div>
+
+        <div class="progress-section">
+            <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 3px;">
+                <span>経験値</span>
+                <span><span id="exp">0</span>/<span id="expNext">10</span></span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="expBar" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <div class="next-box" id="nextBox">次の問題: ...</div>
+        <div class="question-box" id="questionBox">問題: ...</div>
+        
+        <div id="resultText"></div>
+        
+        <div class="progress-bar" style="height: 8px; margin-bottom: 20px;">
+            <div class="combo-timer" id="comboTimer" style="width: 100%"></div>
+        </div>
+
+        <div class="choices" id="choices"></div>
+
+        <div class="controls">
+            <button class="btn btn-primary" id="modeBtn">順番/ランダム</button>
+            <input type="number" id="skipNum" value="10" min="1" max="100">
+            <button class="btn btn-secondary" id="skipBtn">スキップ</button>
+            <button class="btn btn-secondary" id="reviewBtn">復習: OFF</button>
+            <button class="btn btn-secondary" id="reverseBtn">英⇔日</button>
+	    <button class="btn btn-secondary" id="clearMistakesBtn">❌リセット</button>
+        </div>
+
+        <div class="mistakes">
+            <h3>❌ ミスした単語</h3>
+            <div id="mistakes"></div>
+        </div>
+    </div>
+
+    <script>
+        // サンプル単語データ（words.txtの代わり）
+        const wordsData = [
+    // ページ90-91 (IMG_4362)
+    ['face', '〜(の方向)を向く'],
+    ['wear', '着用する、着る'],
+    ['point', '指す、指さす'],
+    ['shelf', '棚'],
+    ['ladder', 'ハシゴ'],
+    ['trim', '(芝や髪の毛を) 刈りそろえる'],
+    ['examine', '詳しく調べる、チェックする'],
+
+    // ページ92-93 (IMG_4363)
+    ['greet', '挨拶する'],
+    ['sweep', '(ホウキやブラシで) 掃く'],
+    ['adjust', '調節する、調整する'],
+    ['head', '向かう'],
+    ['handle', '手で扱う、扱う'],
+    ['lean', '寄りかかる、もたれる'],
+    ['cashier', 'レジ係'],
+    ['polish', '磨く'],
+    ['lid', 'フタ'],
+    ['stool', 'スツール (背もたれのない椅子)'],
+    ['crosswalk', '横断歩道'],
+    ['brick', 'レンガ'],
+    ['hang', '(絵などが) かかる'],
+    ['kneel', 'ひざをつく'],
+
+    // ページ94-95 (IMG_4364)
+    ['sew', '縫う'],
+    ['prop up', '〜に立てかける'],
+    ['walkway', '歩道'],
+    ['side by side', '並んで'],
+    ['applaud', '拍手を送る'],
+    ['water', '水をかける'],
+    ['fasten', '結ぶ、留める'],
+    ['hallway', '廊下'],
+    ['microscope', '顕微鏡'],
+    ['mount', '(上に) 据える、固定する'],
+    ['audience', '聴衆'],
+    ['plaza', '広場'],
+    ['glove', '手袋'],
+    ['place', '置く'],
+
+    // ページ96-97 (IMG_4365)
+    ['protective', '防護用の'],
+    ['scattered', '散らばっている'],
+    ['artwork', '芸術作品'],
+    ['cast a shadow', '影を落とす'],
+    ['page through', 'ページをめくる'],
+    ['row', '列 (縦の列)'],
+    ['reach', '手を伸ばす'],
+    ['diner', '食事客'],
+    ['pour', '注ぐ'],
+    ['load', '積み込む'],
+    ['board', '乗り込む'],
+    ['pot', '壺、深鍋、植木鉢'],
+    ['garbage can', 'ごみ箱'],
+    ['stack', '積み重ねる'],
+
+    // ページ98-99 (IMG_4366)
+    ['drawer', '引き出し'],
+    ['remove', '取り出す、取り外す'],
+    ['cargo', '貨物、荷'],
+    ['auditorium', '講堂'],
+    ['railing', '手すり'],
+    ['potted plant', '鉢植え'],
+    ['position', '位置に置く、位置を合わせる'],
+    ['browse', '(特に買う気もなく店内を) 見て回る'],
+    ['reflect', '(像を) 映す、反映する'],
+    ['lay out', '広げる'],
+    ['doorway', '戸口'],
+    ['wheel', '(車輪の付いたものを) 動かす'],
+    ['lead to', '(道等が) 〜に通じる、つながる'],
+
+    // ページ100-101 (IMG_4367)
+    ['sit opposite', '向き合って座る'],
+    ['in the distance', '遠くに'],
+    ['mow', '刈る'],
+    ['vase', '花瓶'],
+    ['fountain', '噴水、泉'],
+    ['intersection', '交差点'],
+    ['platform', '台、プラットフォーム'],
+    ['dock', '波止場、埠頭'],
+    ['glance', 'ちらっと見る'],
+    ['cupboard', '食器棚'],
+    ['exit', '(場所や乗り物から) 出る'],
+    ['workstation', '仕事場、作業場'],
+    ['gaze', 'じっと見る'],
+    ['curb', '縁石'],
+
+    // ページ102-103 (IMG_4368)
+    ['slant', '傾斜した、斜めの'],
+    ['staircase', '階段'],
+    ['spectator', '観客、見物客'],
+    ['courtyard', '中庭'],
+    ['pottery', '陶器、瀬戸物'],
+    ['cookware', '調理器具'],
+    ['overlook', '見下ろす位置にある'],
+    ['pier', '桟橋'],
+    ['lighthouse', '灯台'],
+    ['portrait', '肖像画'],
+    ['unattended', '無人の'],
+    ['awning', '日よけ'],
+    ['patio', 'テラス'],
+    ['unoccupied', '使われていない'],
+
+    // ページ104-105 (IMG_4369)
+    ['pedestrian', '歩行者'],
+    ['crate', '木箱、ケース'],
+    ['utensil', '調理器具'],
+    ['station', '配置する'],
+    ['window pane', '窓ガラス'],
+    ['stroll', 'ぶらぶら歩く'],
+    ['lamppost', '街灯柱'],
+    ['wheelbarrow', '(手押しの) 一輪車'],
+    ['canopy', '天蓋'],
+
+    // ページ108-109 (IMG_4371)
+    ['lately', '最近、この頃'],
+    ['profession', '専門的職業'],
+    ['supervisor', '監督官、責任者'],
+    ['ensure', '(〜するのを) 保証する、確実にする'],
+    ['submission', '提出物、提出'],
+    ['notify', '知らせる'],
+    ['definitely', '間違いなく、絶対に'],
+    ['eligible', '資格がある'],
+    ['paperwork', '書類、書類作成'],
+    ['complimentary', '無料の'],
+
+    // ページ110-111 (IMG_4372)
+    ['revise', '修正する'],
+    ['track', '追跡する、足跡'],
+    ['administrative', '管理の'],
+    ['retail', '小売りの'],
+    ['inventory', '在庫、棚卸し'],
+    ['extensive', '詳細な、幅広い、大規模な'],
+    ['promotional', '販促用の'],
+    ['catering', '仕出し、出前、ケータリング'],
+    ['wildlife', '野生動物'],
+    ['assign', '割り当てる、任命する'],
+
+    // ページ112-113 (IMG_4373)
+    ['imply', 'ほのめかす、暗示する'],
+    ['banquet', '夕食会'],
+    ['validate', '(有効期限などが) 有効であると確認する'],
+    ['affordable', '手頃な'],
+    ['renovate', '改築する'],
+    ['guidelines', '指針、ガイドライン'],
+    ['certificate', '認定証、証明書'],
+    ['innovative', '革新的な'],
+    ['agenda', '議題'],
+    ['assembly', '組み立て、集会'],
+
+    // ページ114-115 (IMG_4374)
+    ['install', '設置する'],
+    ['orientation', '新入社員説明会'],
+    ['renowned', '名高い、著名な'],
+    ['appropriate', '適切な'],
+    ['ingredient', '(料理の) 材料'],
+    ['storage', '貯蔵、貯蔵施設'],
+    ['beverage', '飲み物'],
+    ['prior', '前の'],
+    ['merger', '合併、統合'],
+    ['inn', '宿、ホテル'],
+
+    // ページ116-117 (IMG_4375)
+    ['equip', '備え付ける'],
+    ['summary', '要約'],
+    ['lease', '賃貸借契約'],
+    ['defective', '欠陥のある、不良の'],
+    ['quarterly', '年4回の、四半期の'],
+    ['extended', '長期間の、長期の'],
+    ['architect', '建築家'],
+    ['grocery', '食料雑貨品'],
+    ['sculpture', '彫刻'],
+    ['itinerary', '旅程表'],
+
+    // ページ118-119 (IMG_4376)
+    ['directory', '名簿、電話帳'],
+    ['expire', '期限が切れる'],
+    ['vendor', '販売業者、屋台'],
+    ['colleague', '同僚'],
+    ['patron', '愛用者、利用者'],
+    ['relocate', '移転させる、引っ越す'],
+    ['tourism', '観光事業'],
+    ['remodel', '改築する、リフォームする'],
+    ['consumer', '消費者'],
+    ['inspect', '検査する'],
+
+    // ページ120-121 (IMG_4377)
+    ['numerous', '数多くの'],
+    ['payroll', '給与、給与管理、賃金台帳'],
+    ['qualified', '資格のある、適任の'],
+    ['appliance', '電化製品'],
+    ['competitive', '競争的な、競争に勝てる'],
+    ['specialize', '専門とする'],
+    ['questionnaire', 'アンケート用紙'],
+    ['approximately', 'おおよそ、約'],
+    ['contribute', '貢献する、寄付する'],
+    ['production', '生産性'],
+
+    // ページ122-123 (IMG_4378)
+    ['promptly', '速やかに、即座に'],
+    ['strategy', '戦略'],
+    ['dedicated', '献身的な、専用の、特化した'],
+    ['exceptional', '例外的な、非常に素晴らしい'],
+    ['luncheon', '昼食会'],
+    ['exceed', '超える'],
+    ['multiple', '複数の'],
+    ['specify', '明確に述べる、明記する'],
+    ['venue', '会場'],
+    ['household', '家庭用'],
+
+    // ページ124-125 (IMG_4379)
+    ['evaluate', '評価する'],
+    ['negotiate', '交渉する'],
+    ['booking', '予約'],
+    ['circulation', '発行部数、流通'],
+    ['completion', '完了、完成'],
+    ['relevant', '関連した'],
+    ['thorough', '徹底的な'],
+    ['via', '〜を経由して'],
+    ['workplace', '職場'],
+    ['accommodations', '宿泊施設'],
+
+    // ページ126-127 (IMG_4380)
+    ['flexible', '柔軟な、フレキシブルな'],
+    ['predict', '予測する'],
+    ['preference', '好み、希望'],
+    ['substantial', 'かなりの、頑丈な'],
+    ['accessible', 'アクセスできる、利用できる'],
+    ['coverage', '報道、保険の補償'],
+    ['generate', '生み出す'],
+    ['refreshment', '軽い飲食物'],
+    ['reliable', '信頼できる、頼りになる'],
+    ['revenue', '歳入'],
+
+    // ページ128-129 (IMG_4381)
+    ['fund-raising', '募金のための夕食会'],
+    ['accomplished', '熟練した、スキルの高い'],
+    ['acquire', '買収する、得る、獲得する'],
+    ['accordingly', 'それに応じて、結果として'],
+    ['critic', '評論家、批評家'],
+    ['highlight', '強調する、スポットライトを当てる'],
+    ['profile', '人物紹介、プロフィール'],
+    ['motivated', 'やる気にさせる'],
+    ['subscription', '購読、加入、会費'],
+    ['encounter', '初めて出会う、遭遇する'],
+
+    // ページ130-131 (IMG_4382)
+    ['luxury', '高級な、贅沢、ぜいたく'],
+    ['prohibit', '禁止する'],
+    ['resolve', '解決する'],
+    ['restore', '復旧させる、取り戻す、修復する'],
+    ['surrounding', '周辺の'],
+    ['alert', '警告、知らせ'],
+    ['anticipated', '待ち望まれた'],
+    ['consistently', '一貫して、常に'],
+    ['dairy', '乳製品、酪農、酪農業'],
+    ['phase', '段階'],
+
+    // ページ132-133 (IMG_4383)
+    ['manuscript', '原稿'],
+    ['overtime', '残業'],
+    ['premises', '敷地'],
+    ['utility', '公共料金、公共サービス'],
+    ['laundry', '洗濯屋 (物)'],
+    ['enthusiastic', '熱心な、関心の高い、乗り気である'],
+    ['outline', '概要を説明する'],
+    ['packet', '袋、小包'],
+    ['retain', '保管する、維持、定着'],
+    ['belongings', '所持品、所有物'],
+
+    // ページ134-135 (IMG_4384)
+    ['conservation', '節約、環境保護'],
+    ['routine', '普段の、日常的に行われる'],
+    ['urban', '都市の、都会の'],
+    ['workforce', '全従業員'],
+    ['biography', '著者の人物紹介、伝記'],
+    ['ownership', '所有権、オーナー'],
+    ['pastry', '焼き菓子'],
+    ['tenant', '賃貸人、入居者'],
+    ['workload', '仕事量'],
+    ['sufficient', '十分な'],
+
+    // ページ136-137 (IMG_4385)
+    ['characteristic', '特徴、特質的な'],
+    ['combined', '共同の、連合の'],
+    ['conclude', '終わる、終える、結論を出す'],
+    ['associate', '提携する、付き合う'],
+    ['conflict', '衝突、対立'],
+    ['investment', '投資、投資家'],
+    ['physician', '医師'],
+    ['token', '表印'],
+    ['partial', '部分的な、一部の'],
+    ['resume', '再開する'],
+
+    // ページ138-139 (IMG_4386)
+    ['dealership', '車販売店'],
+    ['garment', '衣料品'],
+    ['implement', '実行する、実施する'],
+    ['paycheck', '給与、給与小切手'],
+    ['recruit', '採用する、募集する'],
+    ['substitute', '代わりの物、代用品'],
+    ['typically', '通常は、典型的に'],
+    ['authorize', '公認する、権限を与える'],
+    ['comparable', '同等の、匹敵する'],
+    ['faculty', '教員 (大学の)'],
+
+    // ページ140-141 (IMG_4387)
+    ['initiative', '新しい計画、主導権'],
+    ['postage', '郵便料金'],
+    ['afterwards', 'その後で'],
+    ['aim', '目指す、狙う'],
+    ['generally', '一般に、全般に'],
+    ['occupied', '使われている'],
+    ['solid', '堅固な、信頼できる'],
+    ['attempt', '試み、試みる'],
+    ['authority', '権限、権力、当局'],
+    ['domestic', '国内の'],
+
+    // ページ142-143 (IMG_4388)
+    ['permission', '許可'],
+    ['presence', '存在感、出席'],
+    ['rapidly', '急速に'],
+    ['relief', '安心、軽減'],
+    ['reward', '報いる、ほうび'],
+    ['translate', '翻訳する'],
+    ['circumstance', '状況'],
+    ['contrary', '正反対の、対立する'],
+    ['eventually', '最終的には、結局'],
+    ['expose', 'さらす、触れさせる'],
+
+    // ページ144-145 (IMG_4389)
+    ['panel', '専門家グループ'],
+    ['portion', '部分、一人分の食事'],
+    ['primary', '主な、主要な'],
+    ['remark', 'コメント、意見'],
+    ['timely', 'タイミングの良い、時宜を得た'],
+    ['commonly', '一般的に、普通に'],
+    ['consult', '相談に乗る'],
+    ['convert', '改造する、変える'],
+    ['obligation', '義務'],
+    ['resign', '辞職する、辞任する'],
+
+    // ページ146-147 (IMG_4390)
+    ['securely', 'しっかりと、安全に'],
+    ['strive', '懸命に努力する'],
+    ['timeline', '予定表'],
+    ['urge', '強く促す'],
+    ['acknowledge', '認める'],
+    ['diverse', '多種多様な、多くの種類の'],
+    ['transaction', '取引'],
+    ['lack', '不足、〜が不足している'],
+    ['essential', '最も重要、本質的な'],
+    ['majority', '多数、大部分'],
+
+    // ページ148-149 (IMG_4391)
+    ['observe', '傾向に気付く'],
+    ['possess', '知識を持つ'],
+    ['sharply', '売上が急激に上がった'],
+    ['adjustment', '計画を調整する'],
+    ['aisle', '通路側の席'],
+    ['capture', '写真に人生の思い出の瞬間を記録します'],
+    ['consist', '委員会は5人のメンバーで構成されている'],
+    ['desirable', '指導経験があることが望ましい'],
+    ['heavily', '非常に頻繁に使われるバスの路線'],
+    ['investigate', '可能性を調査する'],
+
+    // ページ150-151 (IMG_4392)
+    ['measurement', 'テーブルの寸法を測る'],
+    ['urgent', '緊急の依頼'],
+    ['checkout', 'レジカウンター'],
+    ['dispose', 'ごみを処分する'],
+    ['modify', '契約を修正する'],
+    ['outlet', '日本で店舗をオープンする'],
+    ['prescription', '処方箋を依頼する'],
+    ['situated', '中心街に位置していて、そのホテルは便利'],
+    ['surprisingly', '驚いたことに、テックスは試験に合格した'],
+    ['transform', '電車の駅を博物館に一変させる'],
+
+    // ページ152-153 (IMG_4393)
+    ['undergo', '大規模な改築に入る'],
+    ['blueprint', '新しい劇場の設計図'],
+    ['boost', '会社の利益を押し上げる'],
+    ['considerably', 'かなり安くなった価格'],
+    ['eliminate', 'リスクを取り除く'],
+    ['exclusively', 'メンバー限定で利用できる'],
+    ['leak', '流しの下のパイプから水が漏れている'],
+    ['preliminary', '調査の暫定結果'],
+    ['sophisticated', '洗練されたデザイン'],
+    ['statistics', '一番最近の統計'],
+
+    // ページ154-155 (IMG_4394)
+    ['vacant', 'アパートの空室'],
+    ['evidence', '支払いの証拠'],
+    ['excursion', '買い物のお出かけ'],
+    ['influence', '影響を与える'],
+    ['ordinary', '普通の家に住む'],
+    ['reject', '提案を却下する'],
+    ['tailor', '顧客のニーズにサービスを合わせる'],
+    ['assume', '職務を引き受ける'],
+    ['engagement', '前からの約束 (予約)'],
+    ['fame', '国際的な名声を得る'],
+
+    // ページ156-157 (IMG_4395)
+    ['modest', '小幅の値上げ'],
+    ['patent', '特許を出願する'],
+    ['pursue', 'その会社は新しい市場を追い求めている'],
+    ['remote', '人里離れた山村'],
+    ['reveal', '問題の原因を明らかにする'],
+    ['allowance', '住宅手当'],
+    ['crucial', '技術革新は会社の成功に非常に重要だ'],
+    ['distinguished', 'ジャーナリストとして際立って優れた経歴'],
+    ['disturb', '邪魔してすみません'],
+    ['fluent', '応募者は北京語がペラペラでなければいけない'],
+
+    // ページ158-159 (IMG_4396)
+    ['fulfill', '必要条件を満たす'],
+    ['objective', 'アンケート調査の目的'],
+    ['restriction', '従業員がインターネットにアクセスすることを制限する'],
+    ['steadily', '売上は着実に伸びている'],
+    ['adequate', '十分な説明'],
+    ['assessment', '価値の評価'],
+    ['attribute', '加藤さんが自分を成功したのは幸運のおかげだとしている'],
+    ['beforehand', '前もってアジェンダを用意する'],
+    ['challenging', 'やりがいのある任務'],
+    ['endeavor', '皆さんのこれからの努力が実ることを祈っている'],
+
+    // ページ160-161 (IMG_4397)
+    ['inspiring', 'やる気の出るスピーチ'],
+    ['remarkable', '驚くべき進歩を遂げる'],
+    ['measure', '安全対策を講じる'],
+    ['struggle', 'その会社は生き残るために奮闘している'],
+    ['wage', '賃金水準'],
+    ['adapt', '新しい職場環境に適応する'],
+    ['ambitious', '意欲的な目標を設定する'],
+    ['capable', '私にはその仕事をする能力がある'],
+    ['consequence', '深刻な結果を生む'],
+    ['impose', '顧客に料金を課す'],
+
+    // ページ162-163 (IMG_4398)
+    ['latter', '前者と後者'],
+    ['output', '工場の1日の生産量'],
+    ['proudly', '誇らしげに発表する'],
+    ['stable', '電気の安定した供給'],
+    ['transition', '学校生活から社会人生活への移行'],
+    ['consent', '書面での同意なしに'],
+    ['dependable', '信頼できる車とトラックを生産する'],
+    ['diligent', '加藤さんは勤勉な働き手だ'],
+    ['illustrate', 'ポイントを説明する'],
+    ['independently', '単独でチームの一員としても働く'],
+
+    // ページ164-165 (IMG_4399)
+    ['mission', '会社の使命'],
+    ['moderate', '適度な運動'],
+    ['outlook', '売り上げ見通し'],
+    ['precisely', '迅速かつ正確に'],
+    ['concentrated', '集中的な努力'],
+    ['ample', 'そのホテルには十分な駐車スペースがある'],
+    ['asset', 'チームにとっての財産'],
+    ['controversial', '議論を引き起こす問題'],
+    ['disappointing', '期待外れの売り上げ'],
+    ['instrumental', 'Texはそのプロジェクトで重要な役割を果たした'],
+
+    // ページ166-167 (IMG_4400)
+    ['interruption', '中断なしに'],
+    ['perspective', '幅広い観点から'],
+    ['scope', '調査の範囲'],
+    ['speculation', '業界の専門家からの推測'],
+    ['supplement', '収入を執筆で補う'],
+    ['understaffed', '本当に人手不足です'],
+    ['rarely', 'そのCEOはめったに公に姿を見せない'],
+    ['caution', '注意を払う'],
+    ['legislation', 'ドローンの使用を制限する法律'],
+    ['logical', '妥当な選択']
+];
+
+        let words = wordsData.map(([jp, en]) => ({jp, en}));
+        let currentIndex = 0;
+        let sequentialMode = false;
+        let reverseMode = false;
+        let persistentReview = false;
+        let inReviewPhase = false;
+        let reviewProgress = 0;
+        let reviewBlockStart = -1;
+        let resumeIndex = 0;
+
+        let correctCount = 0;
+        let combo = 0;
+        let maxCombo = 0;
+        let level = 1;
+        let exp = 0;
+        let expToNext = 10;
+
+        let comboTimeLimit = 3500;
+        let comboRemaining = 0;
+        let comboInterval = null;
+
+        let currentWord, currentAnswer, nextWord, nextAnswer;
+        let previousWord = '';
+
+        function init() {
+            generateQuestion();
+            generateNextQuestion();
+            updateDisplay();
+            setupButtons();
+        }
+
+        function generateQuestion() {
+            if (sequentialMode) return;
+            let idx;
+            do {
+                idx = Math.floor(Math.random() * words.length);
+            } while (words.length > 1 && getQuestion(idx) === previousWord);
+            
+            currentWord = getQuestion(idx);
+            currentAnswer = getAnswer(idx);
+            previousWord = currentWord;
+        }
+
+        function generateNextQuestion() {
+            if (sequentialMode) return;
+            let idx = Math.floor(Math.random() * words.length);
+            nextWord = getQuestion(idx);
+            nextAnswer = getAnswer(idx);
+        }
+
+        function getQuestion(idx) {
+            return reverseMode ? words[idx].en : words[idx].jp;
+        }
+
+        function getAnswer(idx) {
+            return reverseMode ? words[idx].jp : words[idx].en;
+        }
+
+        function showByIndex(showIdx, nextIdx) {
+            if (showIdx >= 0 && showIdx < words.length) {
+                currentWord = getQuestion(showIdx);
+                currentAnswer = getAnswer(showIdx);
+            }
+            if (nextIdx >= 0 && nextIdx < words.length) {
+                nextWord = getQuestion(nextIdx);
+            }
+            updateDisplay();
+        }
+
+        function updateDisplay() {
+            document.getElementById('questionBox').textContent = 
+                sequentialMode ? `問題 (${currentIndex + 1}番目): ${currentWord}` : `問題: ${currentWord}`;
+            document.getElementById('nextBox').textContent = 
+                sequentialMode ? `次の問題 (${currentIndex + 2}番目): ${nextWord}` : `次の問題: ${nextWord}`;
+            
+            generateChoices();
+            
+            document.getElementById('correct').textContent = correctCount;
+            document.getElementById('combo').textContent = combo;
+            document.getElementById('maxCombo').textContent = maxCombo;
+            document.getElementById('level').textContent = level;
+            document.getElementById('exp').textContent = exp;
+            document.getElementById('expNext').textContent = expToNext;
+            document.getElementById('expBar').style.width = `${(exp / expToNext) * 100}%`;
+        }
+
+        function generateChoices() {
+            const answers = reverseMode 
+                ? words.map(w => w.jp) 
+                : words.map(w => w.en);
+            
+            let choices = [currentAnswer];
+            while (choices.length < 4 && answers.length > 0) {
+                const ans = answers[Math.floor(Math.random() * answers.length)];
+                if (!choices.includes(ans)) choices.push(ans);
+            }
+            
+            choices.sort(() => Math.random() - 0.5);
+            
+            const container = document.getElementById('choices');
+            container.innerHTML = '';
+            choices.forEach(choice => {
+                const btn = document.createElement('button');
+                btn.className = 'choice-btn';
+                btn.textContent = choice;
+                btn.onclick = () => checkAnswer(btn, choice);
+                container.appendChild(btn);
+            });
+        }
+
+        function checkAnswer(btn, choice) {
+            const buttons = document.querySelectorAll('.choice-btn');
+            buttons.forEach(b => b.disabled = true);
+            
+            const isCorrect = choice === currentAnswer;
+            const resultDiv = document.getElementById('resultText');
+            
+            if (isCorrect) {
+                btn.classList.add('correct');
+                resultDiv.textContent = '正解！';
+                resultDiv.className = 'result-text correct';
+                correctCount++;
+                
+                combo++;
+                if (combo > maxCombo) maxCombo = combo;
+                
+                exp++;
+                if (exp >= expToNext) {
+                    exp -= expToNext;
+                    level++;
+                    expToNext += 5;
+                }
+                
+                startComboTimer();
+            } else {
+                btn.classList.add('incorrect');
+                buttons.forEach(b => {
+                    if (b.textContent === currentAnswer) b.classList.add('correct');
+                });
+                resultDiv.textContent = `不正解... 正解は: ${currentAnswer}`;
+                resultDiv.className = 'result-text incorrect';
+                
+                addMistake();
+                combo = 0;
+                stopComboTimer();
+            }
+            
+            updateDisplay();
+            setTimeout(nextQuestion, 800);
+        }
+
+        function nextQuestion() {
+            document.getElementById('resultText').textContent = '';
+            const buttons = document.querySelectorAll('.choice-btn');
+            buttons.forEach(b => {
+                b.disabled = false;
+                b.className = 'choice-btn';
+            });
+            
+            if (sequentialMode) {
+                if (persistentReview && inReviewPhase) {
+                    let showIdx = reviewBlockStart + reviewProgress;
+                    reviewProgress++;
+                    
+                    if (reviewProgress < 10) {
+                        showByIndex(showIdx, reviewBlockStart + reviewProgress);
+                    } else {
+                        inReviewPhase = false;
+                        currentIndex = resumeIndex;
+                        showByIndex(currentIndex, currentIndex + 1);
+                    }
+                } else {
+                    currentIndex++;
+                    
+                    if (persistentReview && (currentIndex % 10 === 0) && (currentIndex >= 20)) {
+                        reviewBlockStart = currentIndex - 20;
+                        reviewProgress = 0;
+                        resumeIndex = currentIndex;
+                        inReviewPhase = true;
+                        showByIndex(currentIndex - 1, reviewBlockStart);
+                    } else {
+                        showByIndex(currentIndex, currentIndex + 1);
+                    }
+                }
+            } else {
+                currentWord = nextWord;
+                currentAnswer = nextAnswer;
+                generateNextQuestion();
+                updateDisplay();
+            }
+        }
+
+        function addMistake() {
+            const div = document.createElement('div');
+            div.className = 'mistake-item';
+            div.textContent = reverseMode 
+                ? `${currentAnswer} : ${currentWord}` 
+                : `${currentWord} : ${currentAnswer}`;
+            document.getElementById('mistakes').insertBefore(div, document.getElementById('mistakes').firstChild);
+        }
+
+        function startComboTimer() {
+            stopComboTimer();
+            comboRemaining = comboTimeLimit;
+            document.getElementById('comboTimer').style.width = '100%';
+            
+            comboInterval = setInterval(() => {
+                comboRemaining -= 100;
+                if (comboRemaining <= 0) {
+                    combo = 0;
+                    stopComboTimer();
+                    updateDisplay();
+                } else {
+                    document.getElementById('comboTimer').style.width = 
+                        `${(comboRemaining / comboTimeLimit) * 100}%`;
+                }
+            }, 100);
+        }
+
+        function stopComboTimer() {
+            if (comboInterval) {
+                clearInterval(comboInterval);
+                comboInterval = null;
+            }
+            document.getElementById('comboTimer').style.width = '0%';
+        }
+
+        function setupButtons() {
+            document.getElementById('modeBtn').onclick = () => {
+                sequentialMode = !sequentialMode;
+                if (sequentialMode) {
+                    currentIndex = 0;
+                    inReviewPhase = false;
+                    showByIndex(0, 1);
+                } else {
+                    generateQuestion();
+                    generateNextQuestion();
+                    updateDisplay();
+                }
+            };
+
+function resetAll() {
+    // タイマー停止
+    stopComboTimer();
+
+    // 状態を初期値へ戻す
+    sequentialMode = false;
+    reverseMode = false;
+    persistentReview = false;
+    inReviewPhase = false;
+    reviewProgress = 0;
+    reviewBlockStart = -1;
+    resumeIndex = 0;
+    previousWord = '';
+
+    correctCount = 0;
+    combo = 0;
+    maxCombo = 0;
+    level = 1;
+    exp = 0;
+    expToNext = 10;
+
+    // currentIndex を先頭に戻して新しい問題を用意
+    currentIndex = 0;
+    generateQuestion();
+    generateNextQuestion();
+
+    // ミス一覧をクリア
+    const mistakesContainer = document.getElementById('mistakes');
+    mistakesContainer.innerHTML = '';
+
+    // 結果テキストを空に
+    const resultDiv = document.getElementById('resultText');
+    resultDiv.textContent = '';
+    resultDiv.className = '';
+
+    // UI更新
+    updateDisplay();
+}
+
+document.getElementById('clearMistakesBtn').onclick = function() {
+    // 確認ダイアログ（不要なら削除）
+    if (!confirm('本当に全てリセットしますか？（スコア・コンボ・ミス一覧が消えます）')) return;
+
+    resetAll();
+
+    // もし localStorage に状態を保存しているならここで消す（あれば）
+    // localStorage.removeItem('quizState');
+};
+            document.getElementById('skipBtn').onclick = () => {
+                if (!sequentialMode) return alert('順番モードでのみ使用できます');
+                const skipCount = parseInt(document.getElementById('skipNum').value);
+                currentIndex += skipCount;
+                showByIndex(currentIndex, currentIndex + 1);
+            };
+
+            document.getElementById('reviewBtn').onclick = function() {
+                persistentReview = !persistentReview;
+                this.textContent = persistentReview ? '復習: ON' : '復習: OFF';
+            };
+
+            document.getElementById('reverseBtn').onclick = () => {
+                reverseMode = !reverseMode;
+                if (sequentialMode) {
+                    showByIndex(currentIndex, currentIndex + 1);
+                } else {
+                    generateQuestion();
+                    generateNextQuestion();
+                    updateDisplay();
+                }
+            };
+        }
+
+
+        init();
+    </script>
+</body>
+</html>
